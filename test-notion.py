@@ -12,7 +12,12 @@ print("\n--- Deudas con cuotas (sin fijos) ---")
 for d in leer_deudas_personal(incluir_fijos=False):
     print(f"  {d['gasto']}: cuota ${d['monto_final']:,.0f} | quedan {d['pagos_restantes']} pagos")
 
+print("\n--- Fijos recurrentes ---")
+for d in leer_deudas_personal(incluir_fijos=True):
+    if d["es_fijo"]:
+        print(f"  {d['gasto']}: monto ${d['monto_final']:,.0f}")
+
 print("\n--- Próximos 7 días ---")
 for d in deudas_proximas(7):
     fijo = " (fijo)" if d.get("es_fijo") else ""
-    print(f"  {d['gasto']}{fijo}: vence {d['fecha']}")
+    print(f"  {d['gasto']}{fijo}: vence {d['fecha']} | cuota ${d['monto_final']:,.0f}")

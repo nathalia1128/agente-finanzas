@@ -34,12 +34,20 @@ def alerta_deudas_proximas(dias: int):
 
     lineas = [f"🔔 Pagos que vencen en {dias} días:\n"]
     for d in proximas:
-        tabla = "👨‍👩‍👧 familiar" if d.get("tabla") == "familiar" else "👤 tuyo"
+        if d.get("tabla") == "familiar":
+            dueno = d.get("dueno", "familiar")
+            origen = f"👨‍👩‍👧 {dueno}"
+        else:
+            origen = "👤 tuyo"
+
+        fijo = " (fijo)" if d.get("es_fijo") else ""
         lineas.append(
-            f"• {d['gasto']} ({tabla})\n"
-            f"  Cuota: {_cop(d['monto_final'])}\n"
-            f"  Vence: {d['fecha']} | Quedan: {d['pagos_restantes']} pagos"
+            f"• {d['gasto']}{fijo} — {origen}\n"
+            f"  Cuota: {_cop(d['monto_final'])} | "
+            f"Vence: {d['fecha']}"
+            + (f" | Quedan: {d['pagos_restantes']} pagos" if not d.get("es_fijo") else "")
         )
+
     enviar_whatsapp("\n".join(lineas))
 
 # ──────────────────────────────────────────

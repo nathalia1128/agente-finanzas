@@ -182,7 +182,7 @@ def leer_deudas_papas(incluir_fijos=False):
             "id":              page["id"],
             "gasto":           _titulo(p, "Gasto"),
             "monto":           _numero(p, "Monto"),
-            "monto_final":     _formula_cop(p, "Monto final "),
+            "monto_final":     _formula_cop(p, "Monto final"),
             "total_pagado":    _formula_numero(p, "Total pagado"),
             "cuotas":          _numero(p, "Cuotas"),
             "pagos_restantes": pagos,
