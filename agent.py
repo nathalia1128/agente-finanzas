@@ -46,27 +46,28 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}, "required": []}
     },
     {
-        "name": "registrar_gasto_efectivo",
-        "description": (
-            "Registra un gasto pagado en efectivo o débito que afecta "
-            "el presupuesto del mes actual. "
-            "NO usar para compras con tarjeta de crédito."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "nombre":    {"type": "string",  "description": "Descripción. Ej: 'Mercado semanal'"},
-                "monto":     {"type": "number",  "description": "Valor en COP"},
-                "categoria": {
-                    "type": "string",
-                    "enum": ["Comida", "Transporte", "Salud", "Entretenimiento",
-                             "Hogar", "Educación", "Ropa", "Tecnología", "Otros"]
-                },
-                "fecha":     {"type": "string",  "description": "YYYY-MM-DD. Opcional."},
-                "notas":     {"type": "string",  "description": "Contexto adicional. Opcional."}
+    "name": "registrar_gasto_efectivo",
+    "description": (
+        "Registra un gasto o ingreso en efectivo o débito en Gastos esporádicos. "
+        "Usa tipo 'Gasto' para gastos y 'Ingreso' para ingresos recibidos. "
+        "NO usar para compras con tarjeta de crédito."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "nombre":    {"type": "string",  "description": "Descripción. Ej: 'Mercado semanal' o 'Pago freelance'"},
+            "monto":     {"type": "number",  "description": "Valor en COP"},
+            "tipo":      {"type": "string",  "enum": ["Gasto", "Ingreso"], "description": "Gasto o Ingreso"},
+            "categoria": {
+                "type": "string",
+                "enum": ["Comida", "Transporte", "Salud", "Entretenimiento",
+                         "Hogar", "Educación", "Ropa", "Tecnología", "Otros"]
             },
-            "required": ["nombre", "monto", "categoria"]
-        }
+            "fecha":     {"type": "string",  "description": "YYYY-MM-DD. Opcional."},
+            "notas":     {"type": "string",  "description": "Contexto adicional. Opcional."}
+        },
+        "required": ["nombre", "monto", "tipo", "categoria"]
+    }
     },
     {
         "name": "listar_tarjetas_disponibles",
@@ -128,9 +129,10 @@ def ejecutar_herramienta(nombre: str, args: dict) -> dict:
             monto     = args["monto"],
             categoria = args["categoria"],
             fecha     = args.get("fecha"),
-            notas     = args.get("notas", "")
+            notas     = args.get("notas", ""),
+            tipo      = args.get("tipo", "Gasto")
         )
-        return {"ok": True, "mensaje": f"✅ '{args['nombre']}' registrado en Gastos esporádicos"}
+        return {"ok": True, "mensaje": f"✅ '{args['nombre']}' registrado como {args.get('tipo', 'Gasto')}"}
 
     if nombre == "listar_tarjetas_disponibles":
         tarjetas = nc.leer_creditos()

@@ -285,17 +285,17 @@ def leer_presupuesto():
 # ──────────────────────────────────────────
 
 def registrar_gasto_efectivo(nombre: str, monto: float, categoria: str,
-                              fecha: str = None, notas: str = ""):
+                              fecha: str = None, notas: str = "", tipo: str = "Gasto"):
     notion.pages.create(
         parent={"database_id": DB_GASTOS},
         properties={
-            "Nombre":               {"title":    [{"text": {"content": nombre}}]},
-            "Monto":                {"number":   monto},
-            "Tipo":                 {"select":   {"name": "Gasto"}},
-            "Categoría":            {"select":   {"name": categoria}},
-            "Fecha":                {"date":     {"start": fecha or date.today().isoformat()}},
-            "Notas":                {"rich_text":[{"text": {"content": notas}}]},
-            "💲 Presupuesto mensual":{"relation": [{"id": "3d33aefcf317452488139cbbdd5a32df"}]},
+            "Nombre":                {"title":     [{"text": {"content": nombre}}]},
+            "Monto":                 {"number":    monto},
+            "Tipo":                  {"select":    {"name": tipo}},
+            "Categoría":             {"select":    {"name": categoria}},
+            "Fecha":                 {"date":      {"start": fecha or date.today().isoformat()}},
+            "Notas":                 {"rich_text": [{"text": {"content": notas}}]},
+            "💲 Presupuesto mensual": {"relation":  [{"id": "3d33aefcf317452488139cbbdd5a32df"}]},
         }
     )
     return {"ok": True}

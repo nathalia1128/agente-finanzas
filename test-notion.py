@@ -1,14 +1,10 @@
-from notion_db import registrar_compra_tarjeta, leer_creditos
+from notion_db import registrar_gasto_efectivo
 
-tarjetas = leer_creditos()
-rappi    = next((t for t in tarjetas if t["tarjeta"].strip() == "Rappi"), None)
-
-print("Registrando con relación de presupuesto...")
-resultado = registrar_compra_tarjeta(
-    gasto      = "TEST presupuesto v2",
-    monto      = 50000,
-    cuotas     = 1,
-    interes    = "no",
-    credito_id = rappi["id"]
+print("Registrando ingreso de prueba...")
+registrar_gasto_efectivo(
+    nombre    = "TEST ingreso prueba",
+    monto     = 100000,
+    categoria = "Otros",
+    tipo      = "Ingreso"
 )
-print(resultado)
+print("Listo — verifica en Notion")
