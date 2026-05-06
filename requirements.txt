@@ -1,0 +1,16 @@
+anthropic
+fastapi
+uvicorn
+notion-client
+twilio
+schedule
+google-auth
+google-auth-oauthlib
+google-api-python-client
+python-dotenv
+httpx
+openai
+python-multipart
+google-generativeai
+pypdf
+google-genai

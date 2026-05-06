@@ -1,0 +1,34 @@
+name: Alertas financieras diarias
+
+on:
+  schedule:
+    - cron: "0 13 * * *" # 8:00am Colombia (UTC-5)
+  workflow_dispatch: # permite correr manualmente desde GitHub
+
+jobs:
+  alertas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar scheduler
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DB_DEUDAS_PERSONAL: ${{ secrets.DB_DEUDAS_PERSONAL }}
+          DB_DEUDAS_PAPAS: ${{ secrets.DB_DEUDAS_PAPAS }}
+          DB_CREDITOS: ${{ secrets.DB_CREDITOS }}
+          DB_PRESUPUESTO: ${{ secrets.DB_PRESUPUESTO }}
+          DB_GASTOS: ${{ secrets.DB_GASTOS }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_NUMBER: ${{ secrets.TWILIO_WHATSAPP_NUMBER }}
+          MI_WHATSAPP_NUMBER: ${{ secrets.MI_WHATSAPP_NUMBER }}
+        run: python scheduler.py --once
