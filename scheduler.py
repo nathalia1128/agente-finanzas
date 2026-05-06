@@ -15,8 +15,6 @@ twilio     = TwilioClient(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUT
 MI_NUMERO  = os.getenv("MI_WHATSAPP_NUMBER")
 BOT_NUMERO = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
-UMBRAL_ALERTA = 0.80  # avisa al 80% de uso del presupuesto
-
 def _cop(valor: float) -> str:
     return f"${int(valor):,}".replace(",", ".")
 
@@ -24,108 +22,82 @@ def enviar_whatsapp(mensaje: str):
     twilio.messages.create(body=mensaje, from_=BOT_NUMERO, to=MI_NUMERO)
 
 # ──────────────────────────────────────────
-# Alertas de deudas
+# Revisión diaria completa — todo en un mensaje
 # ──────────────────────────────────────────
 
-def alerta_deudas_proximas(dias: int):
-    proximas = nc.deudas_proximas(dias)
-    if not proximas:
-        return
+def revisar_todo():
+    print(f"[{date.today()}] Iniciando revisión diaria...")
+    lineas = [f"📊 *Resumen diario — {date.today().strftime('%d/%m/%Y')}*\n"]
+    hay_contenido = False
 
-    lineas = [f"🔔 Pagos que vencen en {dias} días:\n"]
-    for d in proximas:
-        if d.get("tabla") == "familiar":
-            dueno = d.get("dueno", "familiar")
-            origen = f"👨‍👩‍👧 {dueno}"
-        else:
-            origen = "👤 tuyo"
+    # ── Deudas próximas ──────────────────────────
+    for dias in [3, 7]:
+        proximas = nc.deudas_proximas(dias)
+        if proximas:
+            hay_contenido = True
+            lineas.append(f"🔔 *Pagos que vencen en {dias} días:*")
+            for d in proximas:
+                if d.get("tabla") == "familiar":
+                    dueno = d.get("dueno", "familiar")
+                    origen = f"👨‍👩‍👧 {dueno}"
+                else:
+                    origen = "👤 tuyo"
+                fijo = " (fijo)" if d.get("es_fijo") else ""
+                lineas.append(
+                    f"• {d['gasto']}{fijo} — {origen}\n"
+                    f"  Cuota: {_cop(d['monto_final'])} | Vence: {d['fecha']}"
+                    + (f" | Quedan: {d['pagos_restantes']} pagos" if not d.get("es_fijo") else "")
+                )
+            lineas.append("")
 
-        fijo = " (fijo)" if d.get("es_fijo") else ""
-        lineas.append(
-            f"• {d['gasto']}{fijo} — {origen}\n"
-            f"  Cuota: {_cop(d['monto_final'])} | "
-            f"Vence: {d['fecha']}"
-            + (f" | Quedan: {d['pagos_restantes']} pagos" if not d.get("es_fijo") else "")
-        )
-
-    enviar_whatsapp("\n".join(lineas))
-
-# ──────────────────────────────────────────
-# Alertas de presupuesto
-# ──────────────────────────────────────────
-
-def alerta_presupuesto():
+    # ── Presupuesto ──────────────────────────────
     categorias = nc.leer_presupuesto()
-    mensajes_exceso      = []
-    mensajes_preventivos = []
-
+    alertas_presupuesto = []
     for c in categorias:
         destinado  = c["valor_destinado"]
         disponible = c["presupuesto"]
-        nombre     = c["nombre"]
         alerta     = c["alerta"]
 
         if destinado <= 0:
             continue
 
-        comprometido = destinado - disponible
-        porcentaje   = comprometido / destinado if destinado > 0 else 0
-
         if alerta == "😭":
-            # Notion confirma que se pasó
-            exceso = abs(disponible) if disponible < 0 else comprometido - destinado
-            mensajes_exceso.append(
-                f"🚨 {nombre}: presupuesto excedido\n"
-                f"   Destinado {_cop(destinado)} | Comprometido {_cop(comprometido)}"
+            comprometido = destinado - disponible
+            alertas_presupuesto.append(
+                f"🚨 {c['nombre']}: presupuesto excedido\n"
+                f"  Destinado {_cop(destinado)} | Comprometido {_cop(comprometido)}"
             )
-        elif alerta == "👍" or alerta == "😁":
-            # Notion dice que está bien — no alertar sin importar el porcentaje
-            continue
-        elif porcentaje >= UMBRAL_ALERTA:
-            # Notion no marcó alerta pero estamos cerca del límite
-            mensajes_preventivos.append(
-                f"⚠️ {nombre}: vas al {int(porcentaje * 100)}%\n"
-                f"   Te quedan {_cop(disponible)} de {_cop(destinado)}"
+        elif alerta == "⚠️":
+            alertas_presupuesto.append(
+                f"⚠️ {c['nombre']}: acercándose al límite\n"
+                f"  Te quedan {_cop(disponible)} de {_cop(destinado)}"
             )
+        # 😁 → silencio, todo bien
 
-    if mensajes_exceso:
-        enviar_whatsapp("💸 Presupuesto excedido:\n\n" + "\n\n".join(mensajes_exceso))
-    if mensajes_preventivos:
-        enviar_whatsapp("💰 Alerta de presupuesto:\n\n" + "\n\n".join(mensajes_preventivos))
-# ──────────────────────────────────────────
-# Alertas de facturas (Gmail)
-# ──────────────────────────────────────────
+    if alertas_presupuesto:
+        hay_contenido = True
+        lineas.append("💰 *Presupuesto:*")
+        lineas.extend(alertas_presupuesto)
+        lineas.append("")
 
-def alerta_facturas_hogar():
-    facturas = revisar_correos_nuevos(horas_atras=48)
-    if not facturas:
-        return
+    # ── Facturas Gmail ───────────────────────────
+    facturas = revisar_correos_nuevos(horas_atras=24)
+    if facturas:
+        hay_contenido = True
+        lineas.append("🏠 *Facturas del hogar:*")
+        for f in facturas:
+            if f["extraido"]:
+                fecha_str = f" | Vence: {f['fecha_vencimiento']}" if f["fecha_vencimiento"] else ""
+                lineas.append(f"• {f['nombre']}: {_cop(f['monto'])}{fecha_str}")
+            else:
+                lineas.append(f"• {f['nombre']}: ⚠️ revisa \"{f['asunto'][:35]}\"")
 
-    lineas = ["🏠 Facturas del hogar recibidas:\n"]
-    for f in facturas:
-        if f["extraido"]:
-            fecha_str = f" | Vence: {f['fecha_vencimiento']}" if f["fecha_vencimiento"] else ""
-            monto_str = f"${int(f['monto']):,}".replace(",", ".")
-            lineas.append(f"{f['nombre']}\n  💵 {monto_str}{fecha_str}")
-        else:
-            lineas.append(
-                f"{f['nombre']}\n"
-                f"  ⚠️ No pude leer el monto — revisa: \"{f['asunto'][:40]}\""
-            )
-
-    enviar_whatsapp("\n\n".join(lineas))
-
-# ──────────────────────────────────────────
-# Revisión diaria completa
-# ──────────────────────────────────────────
-
-def revisar_todo():
-    print(f"[{date.today()}] Iniciando revisión diaria...")
-    alerta_deudas_proximas(7)
-    alerta_deudas_proximas(3)
-    alerta_presupuesto()
-    alerta_facturas_hogar()
-    print(f"[{date.today()}] Revisión completada.")
+    # ── Enviar solo si hay algo relevante ────────
+    if hay_contenido:
+        enviar_whatsapp("\n".join(lineas))
+        print(f"[{date.today()}] Alerta enviada.")
+    else:
+        print(f"[{date.today()}] Sin novedades — no se envía mensaje.")
 
 # ──────────────────────────────────────────
 # Punto de entrada
@@ -133,12 +105,10 @@ def revisar_todo():
 
 if __name__ == "__main__":
     if "--once" in sys.argv:
-        # Modo GitHub Actions: corre una vez y termina
         revisar_todo()
     else:
-        # Modo local: loop para desarrollo
         print("Scheduler activo — revisión diaria a las 8:00am")
-        revisar_todo()  # ejecutar al arrancar para verificar
+        revisar_todo()
         schedule.every().day.at("08:00").do(revisar_todo)
         while True:
             schedule.run_pending()
