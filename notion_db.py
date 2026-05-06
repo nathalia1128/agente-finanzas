@@ -228,25 +228,32 @@ def deudas_proximas(dias: int):
 # Lectura: Créditos (tarjetas)
 # ──────────────────────────────────────────
 
+def _texto(props, campo):
+    t = props.get(campo, {}).get("rich_text", [])
+    return t[0]["plain_text"] if t else ""
+
 def leer_creditos():
     pages = _query(DB_CREDITOS)
     tarjetas = []
     for page in pages:
         p = page["properties"]
         tarjetas.append({
-            "id":              page["id"],
-            "tarjeta":         _titulo(p, "Tarjeta"),
-            "personal":        _rollup_numero(p, "Personal"),
-            "otros":           _rollup_numero(p, "Otros"),
-            "total_mes":       _formula_numero(p, "Total mes"),
-            "interes_em":      _numero(p, "Interes E.M"),
-            "cupo":            _numero(p, "Cupo"),
-            "cupo_disponible": _formula_numero(p, "Cupo disponible "),
-            "total_deudas":    _formula_numero(p, "Total deudas"),
-            "total_deudas_mes":_formula_numero(p, "Total deudas mes"),
-            "total_pagado":    _formula_numero(p, "Total pagado"),
-            "monto_personal":  _rollup_numero(p, "Monto total personal"),
-            "monto_otros":     _rollup_numero(p, "Monto total otros"),
+            "id":               page["id"],
+            "tarjeta":          _titulo(p, "Tarjeta"),
+            "personal":         _rollup_numero(p, "Personal"),
+            "otros":            _rollup_numero(p, "Otros"),
+            "total_mes":        _formula_numero(p, "Total mes"),
+            "interes_em":       _numero(p, "Interes E.M"),
+            "cupo":             _numero(p, "Cupo"),
+            "cupo_disponible":  _formula_numero(p, "Cupo disponible "),
+            "total_deudas":     _formula_numero(p, "Total deudas"),
+            "total_deudas_mes": _formula_numero(p, "Total deudas mes"),
+            "total_pagado":     _formula_numero(p, "Total pagado"),
+            "monto_personal":   _rollup_numero(p, "Monto total personal"),
+            "monto_otros":      _rollup_numero(p, "Monto total otros"),
+            "fecha_corte":      _texto(p, "Fecha de corte"),
+            "fecha_pago":       _texto(p, "Fecha de pago"),
+            "tipo":             _select(p, "Tipo"),
         })
     return tarjetas
 
@@ -282,12 +289,13 @@ def registrar_gasto_efectivo(nombre: str, monto: float, categoria: str,
     notion.pages.create(
         parent={"database_id": DB_GASTOS},
         properties={
-            "Nombre":    {"title":     [{"text": {"content": nombre}}]},
-            "Monto":     {"number":    monto},
-            "Tipo":      {"select":    {"name": "Gasto"}},
-            "Categoría": {"select":    {"name": categoria}},
-            "Fecha":     {"date":      {"start": fecha or date.today().isoformat()}},
-            "Notas":     {"rich_text": [{"text": {"content": notas}}]},
+            "Nombre":               {"title":    [{"text": {"content": nombre}}]},
+            "Monto":                {"number":   monto},
+            "Tipo":                 {"select":   {"name": "Gasto"}},
+            "Categoría":            {"select":   {"name": categoria}},
+            "Fecha":                {"date":     {"start": fecha or date.today().isoformat()}},
+            "Notas":                {"rich_text":[{"text": {"content": notas}}]},
+            "💲 Presupuesto mensual":{"relation": [{"id": "3d33aefcf317452488139cbbdd5a32df"}]},
         }
     )
     return {"ok": True}
@@ -296,18 +304,89 @@ def registrar_gasto_efectivo(nombre: str, monto: float, categoria: str,
 # Escritura: Compra con tarjeta → Deudas Personal
 # ──────────────────────────────────────────
 
+def _calcular_fecha_pago(fecha_corte_str: str, fecha_pago_str: str) -> str:
+    """
+    Calcula la fecha de pago correcta según la fecha de corte.
+    - Si hoy <= fecha de corte → paga el mes siguiente en día de pago
+    - Si hoy > fecha de corte → paga dos meses después en día de pago
+    - "Fin de mes" = último día del mes como corte
+    """
+    import calendar
+    hoy = date.today()
+
+    # Determinar día de pago
+    if not fecha_pago_str or not fecha_pago_str.strip().isdigit():
+        return hoy.isoformat()
+    dia_pago = int(fecha_pago_str.strip())
+
+    # Determinar día de corte
+    if fecha_corte_str.strip().lower() in ("fin de mes", "fin"):
+        ultimo_dia = calendar.monthrange(hoy.year, hoy.month)[1]
+        dia_corte  = ultimo_dia
+    elif fecha_corte_str.strip().isdigit():
+        dia_corte = int(fecha_corte_str.strip())
+    else:
+        dia_corte = hoy.day  # si no se entiende, asumir que ya pasó el corte
+
+    # ¿Ya pasamos el corte este mes?
+    try:
+        fecha_corte = hoy.replace(day=dia_corte)
+    except ValueError:
+        fecha_corte = hoy  # día inválido — asumir que pasó
+
+    if hoy <= fecha_corte:
+        # Antes o en el corte → paga el mes siguiente
+        meses_adelante = 1
+    else:
+        # Después del corte → paga dos meses después
+        meses_adelante = 2
+
+    # Calcular mes de pago
+    mes_pago  = hoy.month + meses_adelante
+    anio_pago = hoy.year
+    if mes_pago > 12:
+        mes_pago  -= 12
+        anio_pago += 1
+
+    # Ajustar si el día de pago no existe en ese mes
+    ultimo_dia_mes = calendar.monthrange(anio_pago, mes_pago)[1]
+    dia_pago_final = min(dia_pago, ultimo_dia_mes)
+
+    return date(anio_pago, mes_pago, dia_pago_final).isoformat()
+
+
 def registrar_compra_tarjeta(gasto: str, monto: float, cuotas: int,
                               interes: str, credito_id: str, fecha: str = None):
+    if not fecha:
+        tarjetas = leer_creditos()
+        tarjeta  = next((t for t in tarjetas if t["id"] == credito_id), None)
+        if tarjeta and tarjeta.get("fecha_pago"):
+            fecha = _calcular_fecha_pago(
+                tarjeta.get("fecha_corte", ""),
+                tarjeta["fecha_pago"]
+            )
+        else:
+            fecha = date.today().isoformat()
+
+    # IDs de las 4 categorías del presupuesto
+    PRESUPUESTO_IDS = [
+        "3d33aefcf317452488139cbbdd5a32df",  # Fijos
+        "b9d4b96947de48c5b7e80ce3581c2735",  # Deudas
+        "e9eaf617d8d9450bbd43862adc478d28",  # Ahorros
+        "1318fc0b0df780aab59dd59ec592c046",  # Emergencias
+    ]
+
     notion.pages.create(
         parent={"database_id": DB_DEUDAS_PERSONAL},
         properties={
-            "Gasto":    {"title":    [{"text": {"content": gasto}}]},
-            "Monto":    {"number":   monto},
-            "Cuotas":   {"number":   cuotas},
-            "# pagos":  {"number":   cuotas},
-            "Interes":  {"select":   {"name": interes.capitalize()}},
-            "Fecha":    {"date":     {"start": fecha or date.today().isoformat()}},
-            "Créditos": {"relation": [{"id": credito_id}]},
+            "Gasto":                {"title":    [{"text": {"content": gasto}}]},
+            "Monto":                {"number":   monto},
+            "Cuotas":               {"number":   cuotas},
+            "# pagos":              {"number":   cuotas},
+            "Interes":              {"select":   {"name": interes.capitalize()}},
+            "Fecha":                {"date":     {"start": fecha}},
+            "Créditos":             {"relation": [{"id": credito_id}]},
+            "💲 Presupuesto mensual": {"relation": [{"id": pid} for pid in PRESUPUESTO_IDS]},
         }
     )
     return {"ok": True}

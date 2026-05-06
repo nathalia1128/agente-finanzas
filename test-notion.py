@@ -1,23 +1,14 @@
-from notion_db import leer_presupuesto, leer_creditos, leer_deudas_personal, deudas_proximas
+from notion_db import registrar_compra_tarjeta, leer_creditos
 
-print("--- Presupuesto ---")
-for c in leer_presupuesto():
-    print(f"  {c['nombre']}: destinado ${c['valor_destinado']:,.0f} | disponible ${c['presupuesto']:,.0f}")
+tarjetas = leer_creditos()
+rappi    = next((t for t in tarjetas if t["tarjeta"].strip() == "Rappi"), None)
 
-print("\n--- Tarjetas ---")
-for t in leer_creditos():
-    print(f"  {t['tarjeta']}: cupo ${t['cupo']:,.0f} | disponible ${t['cupo_disponible']:,.0f} | total mes ${t['total_mes']:,.0f}")
-
-print("\n--- Deudas con cuotas (sin fijos) ---")
-for d in leer_deudas_personal(incluir_fijos=False):
-    print(f"  {d['gasto']}: cuota ${d['monto_final']:,.0f} | quedan {d['pagos_restantes']} pagos")
-
-print("\n--- Fijos recurrentes ---")
-for d in leer_deudas_personal(incluir_fijos=True):
-    if d["es_fijo"]:
-        print(f"  {d['gasto']}: monto ${d['monto_final']:,.0f}")
-
-print("\n--- Próximos 7 días ---")
-for d in deudas_proximas(7):
-    fijo = " (fijo)" if d.get("es_fijo") else ""
-    print(f"  {d['gasto']}{fijo}: vence {d['fecha']} | cuota ${d['monto_final']:,.0f}")
+print("Registrando con relación de presupuesto...")
+resultado = registrar_compra_tarjeta(
+    gasto      = "TEST presupuesto v2",
+    monto      = 50000,
+    cuotas     = 1,
+    interes    = "no",
+    credito_id = rappi["id"]
+)
+print(resultado)
