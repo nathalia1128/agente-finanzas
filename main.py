@@ -56,15 +56,14 @@ async def transcribir_audio(media_url: str) -> str:
 
 @app.post("/whatsapp")
 async def webhook_whatsapp(
-    From: str                = Form(...),
-    Body: str                = Form(""),
+    From: str  = Form(...),
+    Body: str  = Form(""),
     MediaUrl0: str           = Form(None),
     MediaContentType0: str   = Form(None),
 ):
     numero    = From
     historial = _historiales.get(numero, [])[-20:]
 
-    # ── Detectar si es audio ──
     es_audio = (
         MediaUrl0 is not None
         and MediaContentType0 is not None
@@ -76,52 +75,40 @@ async def webhook_whatsapp(
             try:
                 texto_transcrito = await transcribir_audio(MediaUrl0)
                 texto = f"[Audio transcrito]: {texto_transcrito}"
-            except Exception as e:
-                # Si falla la transcripción avisar pero no romper
+            except Exception:
                 twiml = MessagingResponse()
-                twiml.message(
-                    "Recibí tu audio pero hubo un error al transcribirlo. "
-                    "Escríbeme el mensaje y te ayudo de una."
-                )
+                twiml.message("Recibí tu audio pero hubo un error al transcribirlo. Escríbeme el mensaje.")
                 return Response(content=str(twiml), media_type="application/xml")
         else:
             twiml = MessagingResponse()
-            twiml.message(
-                "Recibí tu audio pero la transcripción no está activa. "
-                "Escríbeme el mensaje y te ayudo de una."
-            )
+            twiml.message("Recibí tu audio pero la transcripción no está activa. Escríbeme el mensaje.")
             return Response(content=str(twiml), media_type="application/xml")
     else:
         texto = Body.strip()
 
-    # ── Mensaje vacío ──
     if not texto:
         twiml = MessagingResponse()
         twiml.message("No entendí el mensaje. ¿Puedes escribirlo de nuevo?")
         return Response(content=str(twiml), media_type="application/xml")
 
-    # ── Procesar con el agente ──
     try:
         respuesta_texto, historial_nuevo = procesar_mensaje(texto, historial)
         _historiales[numero] = historial_nuevo[-20:]
     except Exception as e:
         import traceback
-        traceback.print_exc()  # muestra el error completo en la terminal
-        respuesta_texto = (
-            f"Error: {str(e)}"  # también te lo manda por WhatsApp
-        )
+        traceback.print_exc()
+
+        # Si el error es de historial corrupto — limpiar y reintentar
+        if "tool_use_id" in str(e) or "tool_result" in str(e):
+            _historiales[numero] = []  # limpiar historial
+            try:
+                respuesta_texto, historial_nuevo = procesar_mensaje(texto, [])
+                _historiales[numero] = historial_nuevo[-20:]
+            except Exception:
+                respuesta_texto = "Tuve un problema procesando tu mensaje. Intenta de nuevo."
+        else:
+            respuesta_texto = "Tuve un problema procesando tu mensaje. Intenta de nuevo."
 
     twiml = MessagingResponse()
     twiml.message(respuesta_texto)
     return Response(content=str(twiml), media_type="application/xml")
-
-# ──────────────────────────────────────────
-# Health check
-# ──────────────────────────────────────────
-
-@app.get("/health")
-def health():
-    return {
-        "status":  "ok",
-        "whisper": "gemini" if WHISPER_ACTIVO else "desactivado"
-    }
