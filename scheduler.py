@@ -55,8 +55,8 @@ def alerta_deudas_proximas(dias: int):
 # ──────────────────────────────────────────
 
 def alerta_presupuesto():
-    categorias          = nc.leer_presupuesto()
-    mensajes_exceso     = []
+    categorias = nc.leer_presupuesto()
+    mensajes_exceso      = []
     mensajes_preventivos = []
 
     for c in categorias:
@@ -69,15 +69,20 @@ def alerta_presupuesto():
             continue
 
         comprometido = destinado - disponible
-        porcentaje   = comprometido / destinado
+        porcentaje   = comprometido / destinado if destinado > 0 else 0
 
         if alerta == "😭":
-            exceso = comprometido - destinado
+            # Notion confirma que se pasó
+            exceso = abs(disponible) if disponible < 0 else comprometido - destinado
             mensajes_exceso.append(
-                f"🚨 {nombre}: excedido en {_cop(abs(exceso))}\n"
+                f"🚨 {nombre}: presupuesto excedido\n"
                 f"   Destinado {_cop(destinado)} | Comprometido {_cop(comprometido)}"
             )
+        elif alerta == "👍" or alerta == "😁":
+            # Notion dice que está bien — no alertar sin importar el porcentaje
+            continue
         elif porcentaje >= UMBRAL_ALERTA:
+            # Notion no marcó alerta pero estamos cerca del límite
             mensajes_preventivos.append(
                 f"⚠️ {nombre}: vas al {int(porcentaje * 100)}%\n"
                 f"   Te quedan {_cop(disponible)} de {_cop(destinado)}"
@@ -87,7 +92,6 @@ def alerta_presupuesto():
         enviar_whatsapp("💸 Presupuesto excedido:\n\n" + "\n\n".join(mensajes_exceso))
     if mensajes_preventivos:
         enviar_whatsapp("💰 Alerta de presupuesto:\n\n" + "\n\n".join(mensajes_preventivos))
-
 # ──────────────────────────────────────────
 # Alertas de facturas (Gmail)
 # ──────────────────────────────────────────
