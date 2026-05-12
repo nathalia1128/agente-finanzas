@@ -21,6 +21,27 @@ def _cop(valor: float) -> str:
 def enviar_whatsapp(mensaje: str):
     twilio.messages.create(body=mensaje, from_=BOT_NUMERO, to=MI_NUMERO)
 
+def deudas_vencidas():
+    """Retorna deudas cuya fecha ya pasó y aún tienen pagos pendientes."""
+    hoy = date.today()
+    vencidas = []
+
+    for deuda in nc.leer_deudas_personal(incluir_fijos=True):
+        if not deuda["fecha"]:
+            continue
+        if date.fromisoformat(deuda["fecha"]) < hoy:
+            deuda["tabla"] = "personal"
+            vencidas.append(deuda)
+
+    for deuda in nc.leer_deudas_papas(incluir_fijos=True):
+        if not deuda["fecha"]:
+            continue
+        if date.fromisoformat(deuda["fecha"]) < hoy:
+            deuda["tabla"] = "familiar"
+            vencidas.append(deuda)
+
+    return sorted(vencidas, key=lambda d: d["fecha"])
+
 # ──────────────────────────────────────────
 # Revisión diaria completa — todo en un mensaje
 # ──────────────────────────────────────────
@@ -29,6 +50,26 @@ def revisar_todo():
     print(f"[{date.today()}] Iniciando revisión diaria...")
     lineas = [f"📊 *Resumen diario — {date.today().strftime('%d/%m/%Y')}*\n"]
     hay_contenido = False
+
+    # ── Deudas vencidas ──────────────────────────
+    vencidas = deudas_vencidas()
+    if vencidas:
+        hay_contenido = True
+        lineas.append("🚨 *PAGOS VENCIDOS — ATENCIÓN INMEDIATA:*")
+        for d in vencidas:
+            if d.get("tabla") == "familiar":
+                origen = f"👨‍👩‍👧 {d.get('dueno', 'familiar')}"
+            else:
+                origen = "👤 tuyo"
+            dias_vencido = (date.today() - date.fromisoformat(d["fecha"])).days
+            fijo = " (fijo)" if d.get("es_fijo") else ""
+            lineas.append(
+                f"⛔ {d['gasto']}{fijo} — {origen}\n"
+                f"  Cuota: {_cop(d['monto_final'])} | "
+                f"Venció hace {dias_vencido} días | "
+                f"Fecha: {d['fecha']}"
+            )
+        lineas.append("")
 
     # ── Deudas próximas ──────────────────────────
     for dias in [3, 7]:
