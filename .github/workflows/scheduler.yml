@@ -23,8 +23,8 @@ jobs:
           GMAIL_CREDENTIALS_B64: ${{ secrets.GMAIL_CREDENTIALS_B64 }}
           GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
         run: |
-          echo "$GMAIL_CREDENTIALS_B64" | base64 -d > credentials.json
-          echo "$GMAIL_TOKEN_B64" | base64 -d > token.json
+          python -c "import base64, os; open('credentials.json','wb').write(base64.b64decode(os.environ['GMAIL_CREDENTIALS_B64']))"
+          python -c "import base64, os; open('token.json','wb').write(base64.b64decode(os.environ['GMAIL_TOKEN_B64']))"
 
       - name: Ejecutar scheduler
         env:
