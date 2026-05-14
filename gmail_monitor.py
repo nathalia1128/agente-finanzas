@@ -333,10 +333,12 @@ def revisar_correos_nuevos(horas_atras: int = 24) -> list[dict]:
         monto  = _extraer_monto(texto)
         fecha  = _extraer_fecha_vencimiento(texto)
 
+        # Busca esta sección y agrega fecha_llegada
         facturas.append({
             "remitente": email_remitente,
             "nombre":    REMITENTES_HOGAR[email_remitente],
             "asunto":    headers.get("Subject", "(sin asunto)"),
+            "fecha_llegada": headers.get("Date", "")[:16],  # ej: "Tue, 13 May 2026"
             "monto":     monto,
             "fecha_vencimiento": fecha,
             "extraido":  monto is not None,

@@ -122,16 +122,18 @@ def revisar_todo():
         lineas.append("")
 
     # ── Facturas Gmail ───────────────────────────
-    facturas = revisar_correos_nuevos(horas_atras=24)
+    facturas = revisar_correos_nuevos(horas_atras=72)
     if facturas:
         hay_contenido = True
         lineas.append("🏠 *Facturas del hogar:*")
         for f in facturas:
+            fecha_llegada = f.get("fecha_llegada", "")
+            fecha_llegada_str = f" | Recibida: {fecha_llegada}" if fecha_llegada else ""
             if f["extraido"]:
-                fecha_str = f" | Vence: {f['fecha_vencimiento']}" if f["fecha_vencimiento"] else ""
-                lineas.append(f"• {f['nombre']}: {_cop(f['monto'])}{fecha_str}")
+                fecha_vence = f" | Vence: {f['fecha_vencimiento']}" if f["fecha_vencimiento"] else ""
+                lineas.append(f"• {f['nombre']}{fecha_llegada_str}\n  💵 {_cop(f['monto'])}{fecha_vence}")
             else:
-                lineas.append(f"• {f['nombre']}: ⚠️ revisa \"{f['asunto'][:35]}\"")
+                lineas.append(f"• {f['nombre']}{fecha_llegada_str}\n  ⚠️ revisa \"{f['asunto'][:35]}\"")
 
     # ── Enviar solo si hay algo relevante ────────
     if hay_contenido:
