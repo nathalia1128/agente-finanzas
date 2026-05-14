@@ -279,6 +279,74 @@ def leer_presupuesto():
         })
     return categorias
 
+# ──────────────────────────────────────────
+# Lectura: Gatos por categoría
+# ──────────────────────────────────────────
+
+def leer_gastos_por_categoria(mes: int = None, anio: int = None) -> dict:
+    """
+    Retorna los gastos esporádicos agrupados por categoría.
+    Si no se especifica mes/año usa el mes actual.
+    """
+    from collections import defaultdict
+    hoy = date.today()
+    mes  = mes  or hoy.month
+    anio = anio or hoy.year
+
+    # Primer y último día del mes
+    primer_dia = date(anio, mes, 1).isoformat()
+    if mes == 12:
+        ultimo_dia = date(anio + 1, 1, 1).isoformat()
+    else:
+        ultimo_dia = date(anio, mes + 1, 1).isoformat()
+
+    pages = _query(
+        DB_GASTOS,
+        filter_obj={
+            "and": [
+                {"property": "Fecha", "date": {"on_or_after": primer_dia}},
+                {"property": "Fecha", "date": {"before": ultimo_dia}},
+                {"property": "Tipo", "select": {"equals": "Gasto"}}
+            ]
+        },
+        sorts=[{"property": "Fecha", "direction": "ascending"}]
+    )
+
+    por_categoria = defaultdict(list)
+    total = 0
+
+    for page in pages:
+        p = page["properties"]
+        nombre    = _titulo(p, "Nombre")
+        monto     = _numero(p, "Monto")
+        categoria = _select(p, "Categoría") or "Sin categoría"
+        fecha     = _fecha(p, "Fecha")
+
+        por_categoria[categoria].append({
+            "nombre": nombre,
+            "monto":  monto,
+            "fecha":  fecha
+        })
+        total += monto
+
+    # Calcular subtotal por categoría
+    resumen = {}
+    for cat, gastos in por_categoria.items():
+        subtotal = sum(g["monto"] for g in gastos)
+        resumen[cat] = {
+            "total":    subtotal,
+            "cantidad": len(gastos),
+            "gastos":   gastos,
+            "porcentaje": round(subtotal / total * 100, 1) if total > 0 else 0
+        }
+
+    return {
+        "mes":    mes,
+        "anio":   anio,
+        "total":  total,
+        "categorias": resumen
+    }
+
 
 # ──────────────────────────────────────────
 # Escritura: Gastos esporádicos (efectivo)
