@@ -16,6 +16,7 @@ REMITENTES_HOGAR = {
     "factura.virtual@clientescol.enel.com":  "⚡ Luz (Enel)",
     "facturacioncolombia@grupovanti.com":     "🔥 Gas (Vanti)",
     "facturavirtual@acueducto.com.co":        "💧 Agua (Acueducto)",
+    "noresponder@acueducto.com.co":           "💧 Agua (Acueducto)",  # remitente real
     "facturaelectronica@etbtufactura.com":    "🌐 Internet (ETB)",
     "wilsonfox18@hotmail.com":               "👤 Wilson",
 }

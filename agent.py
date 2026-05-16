@@ -10,6 +10,28 @@ load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 TOOLS = [
+        {
+        "name": "consultar_beneficios_tarjeta",
+        "description": (
+            "Busca en internet los beneficios actualizados de una tarjeta de crédito específica. "
+            "Usar cuando el usuario pregunte qué tarjeta usar para un tipo de compra, "
+            "o quiera saber los beneficios de alguna de sus tarjetas."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tarjeta": {
+                    "type": "string",
+                    "description": "Nombre de la tarjeta. Ej: 'Rappi Card', 'Nu Colombia', 'Bancolombia Amex Gold', 'Bancolombia Mastercard e-Card'"
+                },
+                "consulta": {
+                    "type": "string",
+                    "description": "Qué quiere saber. Ej: 'beneficios en restaurantes', 'cashback', 'puntos'"
+                }
+            },
+            "required": ["tarjeta"]
+        }
+    },
     {
         "name": "consultar_presupuesto",
         "description": (
@@ -175,6 +197,28 @@ def ejecutar_herramienta(nombre: str, args: dict) -> dict:
             anio = args.get("anio")
         )
 
+    if nombre == "consultar_beneficios_tarjeta":
+        # Usar web search via Anthropic
+        tarjeta  = args["tarjeta"]
+        consulta = args.get("consulta", "beneficios y ventajas")
+        
+        respuesta_web = client.messages.create(
+            model    = "claude-sonnet-4-5",
+            max_tokens = 512,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            messages=[{
+                "role": "user",
+                "content": f"Busca los beneficios actuales de la tarjeta de crédito {tarjeta} en Colombia. Específicamente: {consulta}. Dame información concreta y actualizada."
+            }]
+        )
+        
+        texto_resultado = ""
+        for block in respuesta_web.content:
+            if hasattr(block, "text"):
+                texto_resultado += block.text
+        
+        return {"beneficios": texto_resultado or "No encontré información actualizada sobre esa tarjeta."}
+
     return {"error": f"Herramienta '{nombre}' no encontrada"}
 
 SYSTEM = f"""Eres un asistente financiero personal especializado. Tu única área de expertise son las finanzas personales del usuario.
@@ -216,12 +260,27 @@ FLUJO PARA REGISTRAR:
 Fecha hoy: {date.today().strftime("%d/%m/%Y")}
 Salario base: $2.900.000 COP"""
 
+# Palabras que indican consulta compleja — usa Sonnet
+PALABRAS_SONNET = {
+    "analiza", "análisis", "recomienda", "recomendación", "explica",
+    "consejo", "debería", "conviene", "estrategia", "optimiza",
+    "compara", "qué tan", "por qué", "cómo mejorar", "qué hago"
+}
+
+def _elegir_modelo(texto: str) -> str:
+    texto_lower = texto.lower()
+    for palabra in PALABRAS_SONNET:
+        if palabra in texto_lower:
+            return "claude-sonnet-4-5"
+    return "claude-haiku-4-5-20251001"
+
 def procesar_mensaje(texto: str, historial: list) -> tuple[str, list]:
     historial = historial + [{"role": "user", "content": texto}]
+    modelo = _elegir_modelo(texto)
 
     while True:
         respuesta = client.messages.create(
-            model = "claude-sonnet-4-5",
+            model      = modelo,
             max_tokens = 1024,
             system     = SYSTEM,
             tools      = TOOLS,
