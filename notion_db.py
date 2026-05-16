@@ -25,7 +25,7 @@ DB_GASTOS          = os.getenv("DB_GASTOS")
 # ──────────────────────────────────────────
 
 def _query(database_id: str, filter_obj: dict = None, sorts: list = None) -> list:
-    """Ejecuta queries usando httpx directo — evita bug de notion-client v3."""
+    """Ejecuta queries usando httpx con timeout y reintentos."""
     body = {}
     if filter_obj:
         body["filter"] = filter_obj
@@ -39,12 +39,23 @@ def _query(database_id: str, filter_obj: dict = None, sorts: list = None) -> lis
         if cursor:
             body["start_cursor"] = cursor
 
-        r = httpx.post(
-            f"https://api.notion.com/v1/databases/{database_id}/query",
-            headers=_HEADERS,
-            json=body
-        )
-        r.raise_for_status()
+        # Reintentar hasta 3 veces si hay timeout
+        for intento in range(3):
+            try:
+                r = httpx.post(
+                    f"https://api.notion.com/v1/databases/{database_id}/query",
+                    headers=_HEADERS,
+                    json=body,
+                    timeout=30.0  # 30 segundos
+                )
+                r.raise_for_status()
+                break  # éxito — salir del loop de reintentos
+            except httpx.TimeoutException:
+                if intento == 2:  # último intento
+                    raise
+                import time
+                time.sleep(3)  # esperar 3 segundos antes de reintentar
+
         data = r.json()
         pages.extend(data.get("results", []))
 
