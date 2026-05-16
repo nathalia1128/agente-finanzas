@@ -93,21 +93,19 @@ async def webhook_whatsapp(
 
     try:
         respuesta_texto, historial_nuevo = procesar_mensaje(texto, historial)
-        _historiales[numero] = historial_nuevo[-20:]
+        _historiales[numero] = historial_nuevo[-10:]
     except Exception as e:
         import traceback
         traceback.print_exc()
 
-        # Si el error es de historial corrupto — limpiar y reintentar
-        if "tool_use_id" in str(e) or "tool_result" in str(e):
-            _historiales[numero] = []  # limpiar historial
-            try:
-                respuesta_texto, historial_nuevo = procesar_mensaje(texto, [])
-                _historiales[numero] = historial_nuevo[-20:]
-            except Exception:
-                respuesta_texto = "Tuve un problema procesando tu mensaje. Intenta de nuevo."
-        else:
-            respuesta_texto = "Tuve un problema procesando tu mensaje. Intenta de nuevo."
+        # Limpiar historial en cualquier error y reintentar
+        _historiales[numero] = []
+        try:
+            respuesta_texto, historial_nuevo = procesar_mensaje(texto, [])
+            _historiales[numero] = historial_nuevo[-10:]
+        except Exception as e2:
+            traceback.print_exc()
+            respuesta_texto = f"Error: {str(e2)}"
 
     twiml = MessagingResponse()
     twiml.message(respuesta_texto)
