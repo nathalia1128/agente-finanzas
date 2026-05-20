@@ -617,3 +617,30 @@ def aplicar_distribucion(distribucion: list) -> bool:
             ahorrado = item["ahorrado_nuevo"]
         )
     return True
+
+def leer_ahorros_mes_actual() -> float:
+    """Suma todos los registros de tipo Ahorro del mes actual."""
+    hoy        = date.today()
+    primer_dia = date(hoy.year, hoy.month, 1).isoformat()
+    if hoy.month == 12:
+        ultimo_dia = date(hoy.year + 1, 1, 1).isoformat()
+    else:
+        ultimo_dia = date(hoy.year, hoy.month + 1, 1).isoformat()
+
+    pages = _query(
+        DB_GASTOS,
+        filter_obj={
+            "and": [
+                {"property": "Fecha", "date": {"on_or_after": primer_dia}},
+                {"property": "Fecha", "date": {"before": ultimo_dia}},
+                {"property": "Tipo", "select": {"equals": "Ahorro"}}
+            ]
+        }
+    )
+
+    # Usar la columna Total ahorros que ya tiene el valor o 0
+    total = 0
+    for page in pages:
+        p = page["properties"]
+        total += _numero(p, "Total ahorros")
+    return total

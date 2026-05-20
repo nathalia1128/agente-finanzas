@@ -42,11 +42,46 @@ def deudas_vencidas():
 
     return sorted(vencidas, key=lambda d: d["fecha"])
 
+def distribuir_ahorro_mensual():
+    """
+    Corre el día 2 de cada mes.
+    Lee el ahorro registrado el mes anterior y lo distribuye entre metas activas.
+    """
+    hoy = date.today()
+    if hoy.day != 2:  # solo corre el día 2
+        return
+
+    total = nc.leer_ahorros_mes_actual()
+    if total <= 0:
+        print(f"[{hoy}] Sin ahorros registrados este mes — omitiendo distribución.")
+        return
+
+    distribucion = nc.calcular_distribucion(total)
+    if not distribucion:
+        print(f"[{hoy}] Sin metas activas para distribuir.")
+        return
+
+    nc.aplicar_distribucion(distribucion)
+
+    # Notificar por WhatsApp
+    lineas = [f"💰 *Ahorro del mes distribuido:*\n"]
+    for d in distribucion:
+        lineas.append(
+            f"• {d['meta']} ({d['porcentaje_real']}%): "
+            f"+{_cop(d['monto'])} → {_cop(d['ahorrado_nuevo'])}"
+        )
+    lineas.append(f"\nTotal distribuido: {_cop(total)}")
+    enviar_whatsapp("\n".join(lineas))
+    print(f"[{hoy}] Ahorro mensual distribuido: {_cop(total)}")
+
 # ──────────────────────────────────────────
 # Revisión diaria completa — todo en un mensaje
 # ──────────────────────────────────────────
 
 def revisar_todo():
+    print(f"[{date.today()}] Iniciando revisión diaria...")
+    distribuir_ahorro_mensual()  # solo actúa el día 2
+    # ... resto del código igual
     print(f"[{date.today()}] Iniciando revisión diaria...")
     lineas = [f"📊 *Resumen diario — {date.today().strftime('%d/%m/%Y')}*\n"]
     hay_contenido = False
