@@ -35,6 +35,8 @@ jobs:
           DB_CREDITOS: ${{ secrets.DB_CREDITOS }}
           DB_PRESUPUESTO: ${{ secrets.DB_PRESUPUESTO }}
           DB_GASTOS: ${{ secrets.DB_GASTOS }}
+          DB_METAS: ${{ secrets.DB_METAS }}
+          DB_CONFIG: ${{ secrets.DB_CONFIG }}
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_WHATSAPP_NUMBER: ${{ secrets.TWILIO_WHATSAPP_NUMBER }}

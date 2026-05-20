@@ -43,27 +43,25 @@ def deudas_vencidas():
     return sorted(vencidas, key=lambda d: d["fecha"])
 
 def distribuir_ahorro_mensual():
-    """
-    Corre el día 2 de cada mes.
-    Lee el ahorro registrado el mes anterior y lo distribuye entre metas activas.
-    """
     hoy = date.today()
-    if hoy.day != 2:  # solo corre el día 2
+    if hoy.day != 2:
         return
 
-    total = nc.leer_ahorros_mes_actual()
-    if total <= 0:
-        print(f"[{hoy}] Sin ahorros registrados este mes — omitiendo distribución.")
+    total, page_ids = nc.leer_ahorros_mes_actual()
+    print(f"[{hoy}] Total ahorros no distribuidos: {_cop(total)}")
+
+    if total <= 0 or not page_ids:
+        print(f"[{hoy}] Sin ahorros pendientes — omitiendo.")
         return
 
     distribucion = nc.calcular_distribucion(total)
     if not distribucion:
-        print(f"[{hoy}] Sin metas activas para distribuir.")
+        print(f"[{hoy}] Sin metas activas.")
         return
 
     nc.aplicar_distribucion(distribucion)
+    nc.marcar_ahorros_distribuidos(page_ids)
 
-    # Notificar por WhatsApp
     lineas = [f"💰 *Ahorro del mes distribuido:*\n"]
     for d in distribucion:
         lineas.append(
@@ -72,8 +70,7 @@ def distribuir_ahorro_mensual():
         )
     lineas.append(f"\nTotal distribuido: {_cop(total)}")
     enviar_whatsapp("\n".join(lineas))
-    print(f"[{hoy}] Ahorro mensual distribuido: {_cop(total)}")
-
+    print(f"[{hoy}] Distribución completada.")
 # ──────────────────────────────────────────
 # Revisión diaria completa — todo en un mensaje
 # ──────────────────────────────────────────

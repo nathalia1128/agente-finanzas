@@ -377,10 +377,10 @@ def registrar_gasto_efectivo(nombre: str, monto: float, categoria: str,
             "Fecha":                 {"date":      {"start": fecha or date.today().isoformat()}},
             "Notas":                 {"rich_text": [{"text": {"content": notas}}]},
             "💲 Presupuesto mensual": {"relation":  [{"id": "3d33aefcf317452488139cbbdd5a32df"}]},
+            "Distribuido":           {"checkbox":  tipo != "Ahorro"},  # False si es ahorro, True si es gasto
         }
     )
     return {"ok": True}
-
 # ──────────────────────────────────────────
 # Escritura: Compra con tarjeta → Deudas Personal
 # ──────────────────────────────────────────
@@ -609,17 +609,22 @@ def calcular_distribucion(monto: float) -> list:
 
     return distribucion
 
-def aplicar_distribucion(distribucion: list) -> bool:
-    """Aplica la distribución calculada actualizando cada meta en Notion."""
+def aplicar_distribucion(distribucion: list, page_ids: list = None) -> bool:
+    """Aplica la distribución y opcionalmente marca los ahorros como distribuidos."""
     for item in distribucion:
         actualizar_meta(
-            page_id = item["id"],
+            page_id  = item["id"],
             ahorrado = item["ahorrado_nuevo"]
         )
+    if page_ids:
+        marcar_ahorros_distribuidos(page_ids)
     return True
 
-def leer_ahorros_mes_actual() -> float:
-    """Suma todos los registros de tipo Ahorro del mes actual."""
+def leer_ahorros_mes_actual() -> tuple[float, list]:
+    """
+    Retorna el total de ahorros no distribuidos del mes actual
+    y la lista de page IDs para marcarlos después.
+    """
     hoy        = date.today()
     primer_dia = date(hoy.year, hoy.month, 1).isoformat()
     if hoy.month == 12:
@@ -631,16 +636,27 @@ def leer_ahorros_mes_actual() -> float:
         DB_GASTOS,
         filter_obj={
             "and": [
-                {"property": "Fecha", "date": {"on_or_after": primer_dia}},
-                {"property": "Fecha", "date": {"before": ultimo_dia}},
-                {"property": "Tipo", "select": {"equals": "Ahorro"}}
+                {"property": "Fecha",       "date":     {"on_or_after": primer_dia}},
+                {"property": "Fecha",       "date":     {"before":      ultimo_dia}},
+                {"property": "Tipo",        "select":   {"equals":      "Ahorro"}},
+                {"property": "Distribuido", "checkbox": {"equals":      False}}
             ]
         }
     )
 
-    # Usar la columna Total ahorros que ya tiene el valor o 0
-    total = 0
+    total    = 0
+    page_ids = []
     for page in pages:
         p = page["properties"]
-        total += _numero(p, "Total ahorros")
-    return total
+        total += _formula_numero(p, "Total ahorros")
+        page_ids.append(page["id"])
+
+    return total, page_ids
+
+def marcar_ahorros_distribuidos(page_ids: list):
+    """Marca los registros de ahorro como distribuidos."""
+    for page_id in page_ids:
+        notion.pages.update(
+            page_id    = page_id,
+            properties = {"Distribuido": {"checkbox": True}}
+        )
