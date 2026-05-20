@@ -619,7 +619,6 @@ def aplicar_distribucion(distribucion: list) -> bool:
     return True
 
 def leer_ahorros_mes_actual() -> float:
-    """Suma todos los registros de tipo Ahorro del mes actual."""
     hoy        = date.today()
     primer_dia = date(hoy.year, hoy.month, 1).isoformat()
     if hoy.month == 12:
@@ -638,9 +637,8 @@ def leer_ahorros_mes_actual() -> float:
         }
     )
 
-    # Usar la columna Total ahorros que ya tiene el valor o 0
     total = 0
     for page in pages:
         p = page["properties"]
-        total += _numero(p, "Total ahorros")
+        total += _formula_numero(p, "Total ahorros")  # era _numero
     return total
