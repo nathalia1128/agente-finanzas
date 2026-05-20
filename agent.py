@@ -300,14 +300,17 @@ def ejecutar_herramienta(nombre: str, args: dict) -> dict:
         return {"metas": metas, "config": config}
 
     if nombre == "distribuir_ahorro":
-        monto    = args["monto"]
+        monto     = args["monto"]
         confirmar = args.get("confirmar", False)
-        dist     = nc.calcular_distribucion(monto)
+
+        # Obtener ahorros no distribuidos + calcular distribución
+        total_pendiente, page_ids = nc.leer_ahorros_mes_actual()
+        dist = nc.calcular_distribucion(monto)
 
         if not confirmar:
             return {"distribucion": dist, "pendiente_confirmacion": True}
 
-        nc.aplicar_distribucion(dist)
+        nc.aplicar_distribucion(dist, page_ids)  # pasa los page_ids para marcarlos
         return {"ok": True, "distribucion": dist}
 
     if nombre == "retirar_de_meta":

@@ -1,13 +1,16 @@
-from notion_db import leer_metas, leer_config_ahorros, calcular_distribucion
+import httpx, os
+from dotenv import load_dotenv
+load_dotenv()
 
-print("--- Metas ---")
-for m in leer_metas():
-    print(f"  {m['meta']} | {m['estado']} | {m['porcentaje_base']}% | ahorrado ${m['ahorrado']:,.0f}")
-
-print("\n--- Config ---")
-c = leer_config_ahorros()
-print(f"  Total ahorrado: ${c['total_ahorrado']:,.0f}" if c else "  Sin config")
-
-print("\n--- Simulación distribución $290.000 ---")
-for d in calcular_distribucion(290000):
-    print(f"  {d['meta']}: ${d['monto']:,.0f} ({d['porcentaje_real']}%)")
+r = httpx.post(
+    f"https://api.notion.com/v1/databases/{os.getenv('DB_GASTOS')}/query",
+    headers={
+        "Authorization": f"Bearer {os.getenv('NOTION_TOKEN')}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
+    },
+    json={"page_size": 1}
+)
+props = r.json()["results"][0]["properties"]
+for nombre, valor in props.items():
+    print(f"  '{nombre}' → {valor.get('type')}")
