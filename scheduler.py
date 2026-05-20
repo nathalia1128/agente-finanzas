@@ -43,25 +43,28 @@ def deudas_vencidas():
     return sorted(vencidas, key=lambda d: d["fecha"])
 
 def distribuir_ahorro_mensual():
-    """
-    Corre el día 2 de cada mes.
-    Lee el ahorro registrado el mes anterior y lo distribuye entre metas activas.
-    """
     hoy = date.today()
-    # if hoy.day != 2:  # solo corre el día 2
+    # if hoy.day != 2:
     #     return
 
     total = nc.leer_ahorros_mes_actual()
+    print(f"[debug] Total ahorros mes actual: {total}")
+
     if total <= 0:
-        print(f"[{hoy}] Sin ahorros registrados este mes — omitiendo distribución.")
+        print(f"[debug] Sin ahorros — omitiendo")
         return
 
     distribucion = nc.calcular_distribucion(total)
+    print(f"[debug] Distribución calculada: {len(distribucion)} metas")
+    for d in distribucion:
+        print(f"[debug]   {d['meta']}: +{d['monto']}")
+
     if not distribucion:
-        print(f"[{hoy}] Sin metas activas para distribuir.")
         return
 
     nc.aplicar_distribucion(distribucion)
+    print(f"[debug] Distribución aplicada")
+    # ... resto igual
 
     # Notificar por WhatsApp
     lineas = [f"💰 *Ahorro del mes distribuido:*\n"]
