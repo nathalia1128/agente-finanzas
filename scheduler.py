@@ -48,8 +48,8 @@ def distribuir_ahorro_mensual():
     Lee el ahorro registrado el mes anterior y lo distribuye entre metas activas.
     """
     hoy = date.today()
-    if hoy.day != 2:  # solo corre el día 2
-        return
+    # if hoy.day != 2:  # solo corre el día 2
+    #     return
 
     total = nc.leer_ahorros_mes_actual()
     if total <= 0:
