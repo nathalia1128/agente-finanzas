@@ -19,6 +19,8 @@ DB_DEUDAS_PAPAS    = os.getenv("DB_DEUDAS_PAPAS")
 DB_CREDITOS        = os.getenv("DB_CREDITOS")
 DB_PRESUPUESTO     = os.getenv("DB_PRESUPUESTO")
 DB_GASTOS          = os.getenv("DB_GASTOS")
+DB_METAS           = os.getenv("DB_METAS")
+DB_CONFIG          = os.getenv("DB_CONFIG")
 
 # ──────────────────────────────────────────
 # Helper central para queries
@@ -469,3 +471,149 @@ def registrar_compra_tarjeta(gasto: str, monto: float, cuotas: int,
         }
     )
     return {"ok": True}
+
+# ──────────────────────────────────────────
+# Lectura: Metas de ahorro
+# ──────────────────────────────────────────
+
+def leer_metas():
+    """Lee todas las metas de ahorro."""
+    pages = _query(DB_METAS)
+    metas = []
+    for page in pages:
+        p = page["properties"]
+        metas.append({
+            "id":                  page["id"],
+            "meta":                _titulo(p, "Meta"),
+            "valor_meta":          _numero(p, "Valor meta"),
+            "porcentaje_base":     _numero(p, "Porcentaje base"),
+            "estado":              _select(p, "Estado"),
+            "tipo":                _select(p, "Tipo"),
+            "ahorrado":            _numero(p, "Ahorrado"),
+            "retirado":            _numero(p, "Retirado"),
+            "disponible":          _formula_numero(p, "Disponible"),
+            "porcentaje_alcanzado":_formula_numero(p, "Porcentaje alcanzado"),
+        })
+    return metas
+
+def leer_metas_activas():
+    """Lee solo las metas con Estado = Activa."""
+    pages = _query(
+        DB_METAS,
+        filter_obj={"property": "Estado", "select": {"equals": "Activa"}}
+    )
+    metas = []
+    for page in pages:
+        p = page["properties"]
+        metas.append({
+            "id":              page["id"],
+            "meta":            _titulo(p, "Meta"),
+            "valor_meta":      _numero(p, "Valor meta"),
+            "porcentaje_base": _numero(p, "Porcentaje base"),
+            "tipo":            _select(p, "Tipo"),
+            "ahorrado":        _numero(p, "Ahorrado"),
+            "retirado":        _numero(p, "Retirado"),
+            "disponible":      _formula_numero(p, "Disponible"),
+            "porcentaje_alcanzado": _formula_numero(p, "Porcentaje alcanzado"),
+        })
+    return metas
+
+def leer_config_ahorros():
+    """Lee la fila Config de la tabla Config Ahorros."""
+    pages = _query(DB_CONFIG)
+    if not pages:
+        return None
+    p = pages[0]["properties"]
+    return {
+        "id":                pages[0]["id"],
+        "total_ahorrado":    _rollup_numero(p, "Total ahorrado"),
+        "porcentaje_activos":_numero(p, "Porcentaje activos"),
+    }
+
+# ──────────────────────────────────────────
+# Escritura: Metas de ahorro
+# ──────────────────────────────────────────
+
+def actualizar_meta(page_id: str, ahorrado: float = None, retirado: float = None,
+                    estado: str = None, porcentaje_base: float = None):
+    """Actualiza campos de una meta existente."""
+    props = {}
+    if ahorrado is not None:
+        props["Ahorrado"] = {"number": ahorrado}
+    if retirado is not None:
+        props["Retirado"] = {"number": retirado}
+    if estado is not None:
+        props["Estado"] = {"select": {"name": estado}}
+    if porcentaje_base is not None:
+        props["Porcentaje base"] = {"number": porcentaje_base}
+
+    notion.pages.update(page_id=page_id, properties=props)
+    return {"ok": True}
+
+def crear_meta(nombre: str, valor_meta: float, porcentaje_base: float,
+               tipo: str, estado: str = "Activa"):
+    """Crea una nueva meta de ahorro."""
+    notion.pages.create(
+        parent={"database_id": DB_METAS},
+        properties={
+            "Meta":            {"title":  [{"text": {"content": nombre}}]},
+            "Valor meta":      {"number": valor_meta},
+            "Porcentaje base": {"number": porcentaje_base},
+            "Tipo":            {"select": {"name": tipo}},
+            "Estado":          {"select": {"name": estado}},
+            "Ahorrado":        {"number": 0},
+            "Retirado":        {"number": 0},
+        }
+    )
+    return {"ok": True}
+
+def actualizar_porcentaje_activos(page_id: str, porcentaje: float):
+    """Actualiza el campo Porcentaje activos en Config Ahorros."""
+    notion.pages.update(
+        page_id=page_id,
+        properties={"Porcentaje activos": {"number": porcentaje}}
+    )
+    return {"ok": True}
+
+# ──────────────────────────────────────────
+# Lógica: Distribuir ahorro entre metas
+# ──────────────────────────────────────────
+
+def calcular_distribucion(monto: float) -> list:
+    """
+    Calcula cuánto corresponde a cada meta activa.
+    Los porcentajes se normalizan para que sumen 100
+    aunque alguna meta esté pausada.
+    """
+    metas = leer_metas_activas()
+    if not metas:
+        return []
+
+    total_porcentaje = sum(m["porcentaje_base"] for m in metas)
+    if total_porcentaje == 0:
+        return []
+
+    distribucion = []
+    for m in metas:
+        porcentaje_real = m["porcentaje_base"] / total_porcentaje
+        monto_meta      = round(monto * porcentaje_real)
+        distribucion.append({
+            "id":              m["id"],
+            "meta":            m["meta"],
+            "porcentaje_base": m["porcentaje_base"],
+            "porcentaje_real": round(porcentaje_real * 100, 1),
+            "monto":           monto_meta,
+            "ahorrado_actual": m["ahorrado"],
+            "ahorrado_nuevo":  m["ahorrado"] + monto_meta,
+        })
+
+    return distribucion
+
+def aplicar_distribucion(distribucion: list) -> bool:
+    """Aplica la distribución calculada actualizando cada meta en Notion."""
+    for item in distribucion:
+        actualizar_meta(
+            page_id = item["id"],
+            ahorrado = item["ahorrado_nuevo"]
+        )
+    return True

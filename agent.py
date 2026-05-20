@@ -145,6 +145,81 @@ TOOLS = [
                 "anio": {"type": "integer", "description": "Año. Opcional, default año actual."}
             },
             "required": []
+        },        
+    },
+    {
+        "name": "consultar_metas_ahorro",
+        "description": (
+            "Consulta el estado de todas las metas de ahorro. "
+            "Muestra progreso, disponible y porcentaje alcanzado. "
+            "Usar cuando pregunten por ahorros, metas o progreso."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "distribuir_ahorro",
+        "description": (
+            "Distribuye un monto de ahorro esporádico entre las metas activas "
+            "según sus porcentajes. SIEMPRE mostrar el desglose al usuario "
+            "y pedir confirmación antes de aplicar."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "monto":     {"type": "number", "description": "Monto a distribuir en COP"},
+                "confirmar": {"type": "boolean", "description": "Si true aplica la distribución. Si false solo muestra el desglose."}
+            },
+            "required": ["monto", "confirmar"]
+        }
+    },
+    {
+        "name": "retirar_de_meta",
+        "description": (
+            "Registra un retiro de una meta de ahorro cuando el usuario usa ese dinero. "
+            "Si la meta es de tipo Una vez la pausa después del retiro."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "meta_id":  {"type": "string", "description": "ID de la meta"},
+                "monto":    {"type": "number", "description": "Monto a retirar"},
+                "pausar":   {"type": "boolean", "description": "Si true pausa la meta después del retiro"}
+            },
+            "required": ["meta_id", "monto"]
+        }
+    },
+    {
+        "name": "crear_meta_ahorro",
+        "description": (
+            "Crea una nueva meta de ahorro. "
+            "SIEMPRE verificar que los porcentajes sigan sumando 100 "
+            "y pedir confirmación antes de crear."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nombre":          {"type": "string"},
+                "valor_meta":      {"type": "number", "description": "Cuánto quiere acumular"},
+                "porcentaje_base": {"type": "number", "description": "% del ahorro mensual"},
+                "tipo":            {"type": "string", "enum": ["Una vez", "Recurrente"]}
+            },
+            "required": ["nombre", "valor_meta", "porcentaje_base", "tipo"]
+        }
+    },
+    {
+        "name": "transferir_porcentaje",
+        "description": (
+            "Transfiere el porcentaje de una meta pausada a otra u otras metas activas. "
+            "Usar cuando el usuario quiera redirigir el ahorro de una meta completada."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "meta_origen_id":   {"type": "string", "description": "ID de la meta que cede el porcentaje"},
+                "meta_destino_id":  {"type": "string", "description": "ID de la meta que recibe. Si es null se redistribuye entre todas las activas."},
+                "porcentaje":       {"type": "number", "description": "Porcentaje a transferir"}
+            },
+            "required": ["meta_origen_id", "porcentaje"]
         }
     }
 ]
@@ -218,6 +293,89 @@ def ejecutar_herramienta(nombre: str, args: dict) -> dict:
                 texto_resultado += block.text
         
         return {"beneficios": texto_resultado or "No encontré información actualizada sobre esa tarjeta."}
+    
+    if nombre == "consultar_metas_ahorro":
+        metas    = nc.leer_metas()
+        config   = nc.leer_config_ahorros()
+        return {"metas": metas, "config": config}
+
+    if nombre == "distribuir_ahorro":
+        monto    = args["monto"]
+        confirmar = args.get("confirmar", False)
+        dist     = nc.calcular_distribucion(monto)
+
+        if not confirmar:
+            return {"distribucion": dist, "pendiente_confirmacion": True}
+
+        nc.aplicar_distribucion(dist)
+        return {"ok": True, "distribucion": dist}
+
+    if nombre == "retirar_de_meta":
+        meta_id = args["meta_id"]
+        monto   = args["monto"]
+        pausar  = args.get("pausar", False)
+
+        metas = nc.leer_metas()
+        meta  = next((m for m in metas if m["id"] == meta_id), None)
+        if not meta:
+            return {"error": "Meta no encontrada"}
+
+        nuevo_retirado = meta["retirado"] + monto
+        nc.actualizar_meta(page_id=meta_id, retirado=nuevo_retirado)
+
+        if pausar or meta["tipo"] == "Una vez":
+            nc.actualizar_meta(page_id=meta_id, estado="Pausada")
+
+        return {"ok": True, "meta": meta["meta"], "retirado_total": nuevo_retirado}
+
+    if nombre == "crear_meta_ahorro":
+        metas_activas = nc.leer_metas_activas()
+        total_actual  = sum(m["porcentaje_base"] for m in metas_activas)
+        nuevo_total   = total_actual + args["porcentaje_base"]
+
+        if nuevo_total != 100:
+            return {
+                "error": f"Los porcentajes quedarían en {nuevo_total}% — deben sumar 100%",
+                "total_actual": total_actual,
+                "porcentaje_disponible": 100 - total_actual
+            }
+
+        nc.crear_meta(
+            nombre         = args["nombre"],
+            valor_meta     = args["valor_meta"],
+            porcentaje_base= args["porcentaje_base"],
+            tipo           = args["tipo"]
+        )
+        return {"ok": True}
+
+    if nombre == "transferir_porcentaje":
+        meta_origen_id  = args["meta_origen_id"]
+        meta_destino_id = args.get("meta_destino_id")
+        porcentaje      = args["porcentaje"]
+        metas_activas   = nc.leer_metas_activas()
+
+        if meta_destino_id:
+            # Transferir a una meta específica
+            meta_destino = next((m for m in metas_activas if m["id"] == meta_destino_id), None)
+            if not meta_destino:
+                return {"error": "Meta destino no encontrada o no está activa"}
+            nuevo_porcentaje = meta_destino["porcentaje_base"] + porcentaje
+            nc.actualizar_meta(page_id=meta_destino_id, porcentaje_base=nuevo_porcentaje)
+        else:
+            # Redistribuir entre todas las activas proporcionalmente
+            total = sum(m["porcentaje_base"] for m in metas_activas)
+            if total == 0:
+                return {"error": "No hay metas activas para redistribuir"}
+            for m in metas_activas:
+                extra = round(porcentaje * m["porcentaje_base"] / total, 1)
+                nc.actualizar_meta(
+                    page_id         = m["id"],
+                    porcentaje_base = m["porcentaje_base"] + extra
+                )
+
+        # Pausar la meta origen
+        nc.actualizar_meta(page_id=meta_origen_id, estado="Pausada")
+        return {"ok": True}
 
     return {"error": f"Herramienta '{nombre}' no encontrada"}
 
