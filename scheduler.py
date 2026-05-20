@@ -44,8 +44,8 @@ def deudas_vencidas():
 
 def distribuir_ahorro_mensual():
     hoy = date.today()
-    # if hoy.day != 2:
-    #     return
+    if hoy.day != 2:
+        return
 
     total, page_ids = nc.leer_ahorros_mes_actual()
     print(f"[{hoy}] Total ahorros no distribuidos: {_cop(total)}")
