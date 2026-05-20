@@ -110,3 +110,7 @@ async def webhook_whatsapp(
     twiml = MessagingResponse()
     twiml.message(respuesta_texto)
     return Response(content=str(twiml), media_type="application/xml")
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
