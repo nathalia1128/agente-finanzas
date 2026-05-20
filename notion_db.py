@@ -20,7 +20,6 @@ DB_CREDITOS        = os.getenv("DB_CREDITOS")
 DB_PRESUPUESTO     = os.getenv("DB_PRESUPUESTO")
 DB_GASTOS          = os.getenv("DB_GASTOS")
 DB_METAS           = os.getenv("DB_METAS")
-DB_CONFIG          = os.getenv("DB_CONFIG")
 
 # ──────────────────────────────────────────
 # Helper central para queries
@@ -518,18 +517,6 @@ def leer_metas_activas():
         })
     return metas
 
-def leer_config_ahorros():
-    """Lee la fila Config de la tabla Config Ahorros."""
-    pages = _query(DB_CONFIG)
-    if not pages:
-        return None
-    p = pages[0]["properties"]
-    return {
-        "id":                pages[0]["id"],
-        "total_ahorrado":    _rollup_numero(p, "Total ahorrado"),
-        "porcentaje_activos":_numero(p, "Porcentaje activos"),
-    }
-
 # ──────────────────────────────────────────
 # Escritura: Metas de ahorro
 # ──────────────────────────────────────────
@@ -564,14 +551,6 @@ def crear_meta(nombre: str, valor_meta: float, porcentaje_base: float,
             "Ahorrado":        {"number": 0},
             "Retirado":        {"number": 0},
         }
-    )
-    return {"ok": True}
-
-def actualizar_porcentaje_activos(page_id: str, porcentaje: float):
-    """Actualiza el campo Porcentaje activos en Config Ahorros."""
-    notion.pages.update(
-        page_id=page_id,
-        properties={"Porcentaje activos": {"number": porcentaje}}
     )
     return {"ok": True}
 

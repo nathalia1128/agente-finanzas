@@ -297,9 +297,14 @@ def ejecutar_herramienta(nombre: str, args: dict) -> dict:
         return {"beneficios": texto_resultado or "No encontré información actualizada sobre esa tarjeta."}
     
     if nombre == "consultar_metas_ahorro":
-        metas    = nc.leer_metas()
-        config   = nc.leer_config_ahorros()
-        return {"metas": metas, "config": config}
+        metas = nc.leer_metas()
+        total_ahorrado   = sum(m["ahorrado"] for m in metas)
+        total_disponible = sum(m["disponible"] for m in metas)
+        return {
+            "metas":            metas,
+            "total_ahorrado":   total_ahorrado,
+            "total_disponible": total_disponible
+        }
 
     if nombre == "distribuir_ahorro":
         confirmar = args.get("confirmar", False)
