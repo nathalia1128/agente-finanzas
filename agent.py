@@ -159,17 +159,19 @@ TOOLS = [
     {
         "name": "distribuir_ahorro",
         "description": (
-            "Distribuye un monto de ahorro esporádico entre las metas activas "
-            "según sus porcentajes. SIEMPRE mostrar el desglose al usuario "
-            "y pedir confirmación antes de aplicar."
+            "Distribuye los ahorros pendientes (Distribuido=False) entre las metas activas. "
+            "SIEMPRE usar registrar_gasto_efectivo con tipo Ahorro ANTES de llamar esta herramienta. "
+            "Muestra el desglose al usuario y pide confirmación antes de aplicar."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "monto":     {"type": "number", "description": "Monto a distribuir en COP"},
-                "confirmar": {"type": "boolean", "description": "Si true aplica la distribución. Si false solo muestra el desglose."}
+                "confirmar": {
+                    "type": "boolean",
+                    "description": "Si true aplica la distribución. Si false solo muestra el desglose."
+                }
             },
-            "required": ["monto", "confirmar"]
+            "required": ["confirmar"]
         }
     },
     {
@@ -300,18 +302,20 @@ def ejecutar_herramienta(nombre: str, args: dict) -> dict:
         return {"metas": metas, "config": config}
 
     if nombre == "distribuir_ahorro":
-        monto     = args["monto"]
         confirmar = args.get("confirmar", False)
 
-        # Obtener ahorros no distribuidos + calcular distribución
-        total_pendiente, page_ids = nc.leer_ahorros_mes_actual()
-        dist = nc.calcular_distribucion(monto)
+        total, page_ids = nc.leer_ahorros_mes_actual()
+
+        if total <= 0:
+            return {"error": "No hay ahorros pendientes de distribuir este mes."}
+
+        dist = nc.calcular_distribucion(total)
 
         if not confirmar:
-            return {"distribucion": dist, "pendiente_confirmacion": True}
+            return {"distribucion": dist, "total": total, "pendiente_confirmacion": True}
 
-        nc.aplicar_distribucion(dist, page_ids)  # pasa los page_ids para marcarlos
-        return {"ok": True, "distribucion": dist}
+        nc.aplicar_distribucion(dist, page_ids)
+        return {"ok": True, "distribucion": dist, "total": total}
 
     if nombre == "retirar_de_meta":
         meta_id = args["meta_id"]
