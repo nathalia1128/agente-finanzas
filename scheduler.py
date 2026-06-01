@@ -104,24 +104,44 @@ def revisar_todo():
         lineas.append("")
 
     # ── Deudas próximas ──────────────────────────
-    for dias in [3, 7]:
-        proximas = nc.deudas_proximas(dias)
-        if proximas:
-            hay_contenido = True
-            lineas.append(f"🔔 *Pagos que vencen en {dias} días:*")
-            for d in proximas:
-                if d.get("tabla") == "familiar":
-                    dueno = d.get("dueno", "familiar")
-                    origen = f"👨‍👩‍👧 {dueno}"
-                else:
-                    origen = "👤 tuyo"
-                fijo = " (fijo)" if d.get("es_fijo") else ""
-                lineas.append(
-                    f"• {d['gasto']}{fijo} — {origen}\n"
-                    f"  Cuota: {_cop(d['monto_final'])} | Vence: {d['fecha']}"
-                    + (f" | Quedan: {d['pagos_restantes']} pagos" if not d.get("es_fijo") else "")
-                )
-            lineas.append("")
+    proximas_3 = nc.deudas_proximas(3)
+    proximas_7 = nc.deudas_proximas(7)
+
+    # Eliminar de 7 días las que ya aparecen en 3 días
+    ids_3 = {d["id"] for d in proximas_3}
+    solo_7 = [d for d in proximas_7 if d["id"] not in ids_3]
+
+    if proximas_3:
+        hay_contenido = True
+        lineas.append("🚨 *Pagos que vencen en 3 días:*")
+        for d in proximas_3:
+            if d.get("tabla") == "familiar":
+                origen = f"👨‍👩‍👧 {d.get('dueno', 'familiar')}"
+            else:
+                origen = "👤 tuyo"
+            fijo = " (fijo)" if d.get("es_fijo") else ""
+            lineas.append(
+                f"• {d['gasto']}{fijo} — {origen}\n"
+                f"  Cuota: {_cop(d['monto_final'])} | Vence: {d['fecha']}"
+                + (f" | Quedan: {d['pagos_restantes']} pagos" if not d.get("es_fijo") else "")
+            )
+        lineas.append("")
+
+    if solo_7:
+        hay_contenido = True
+        lineas.append("🔔 *Pagos que vencen en 7 días:*")
+        for d in solo_7:
+            if d.get("tabla") == "familiar":
+                origen = f"👨‍👩‍👧 {d.get('dueno', 'familiar')}"
+            else:
+                origen = "👤 tuyo"
+            fijo = " (fijo)" if d.get("es_fijo") else ""
+            lineas.append(
+                f"• {d['gasto']}{fijo} — {origen}\n"
+                f"  Cuota: {_cop(d['monto_final'])} | Vence: {d['fecha']}"
+                + (f" | Quedan: {d['pagos_restantes']} pagos" if not d.get("es_fijo") else "")
+            )
+        lineas.append("")
 
     # ── Presupuesto ──────────────────────────────
     categorias = nc.leer_presupuesto()
