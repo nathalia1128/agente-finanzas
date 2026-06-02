@@ -32,9 +32,17 @@ agente-finanzas/
 ├── notion_db.py         # Operaciones CRUD sobre bases de datos de Notion
 ├── gmail_monitor.py     # Monitoreo de Gmail y extraccion de facturas
 ├── scheduler.py         # Alertas diarias automaticas
+├── tests/
+│   ├── test_gmail.py
+│   ├── test_historial.py
+│   ├── test_notion.py
+│   └── test_scheduler.py
+├── docs/
+│   └── arquitectura_proyecto.md
 ├── .github/
 │   └── workflows/
 │       └── scheduler.yml  # Cron job 8am (hora Colombia)
+├── .env.example         # Variables de entorno requeridas (sin valores reales)
 ├── requirements.txt
 └── Procfile             # Configuracion Heroku
 ```
