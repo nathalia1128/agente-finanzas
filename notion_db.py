@@ -453,7 +453,6 @@ def registrar_compra_tarjeta(gasto: str, monto: float, cuotas: int,
         "3d33aefcf317452488139cbbdd5a32df",  # Fijos
         "b9d4b96947de48c5b7e80ce3581c2735",  # Deudas
         "e9eaf617d8d9450bbd43862adc478d28",  # Ahorros
-        "1318fc0b0df780aab59dd59ec592c046",  # Emergencias
     ]
 
     notion.pages.create(
