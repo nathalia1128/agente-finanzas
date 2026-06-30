@@ -86,7 +86,7 @@ def procesar_y_responder(numero: str, texto: str, historial: list):
 
     try:
         twilio_client.messages.create(
-            from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
+            from_=TWILIO_WHATSAPP_NUMBER,  # ya incluye el prefijo "whatsapp:" en el .env
             to=numero,  # numero ya viene como "whatsapp:+57..."
             body=respuesta_texto
         )
