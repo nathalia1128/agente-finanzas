@@ -2,8 +2,9 @@
 import os
 import tempfile
 import httpx
-from fastapi import FastAPI, Form, Response
+from fastapi import FastAPI, Form, Response, BackgroundTasks
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client as TwilioClient
 from agent import procesar_mensaje
 from dotenv import load_dotenv
 
@@ -15,6 +16,13 @@ _historiales: dict[str, list] = {}
 
 # Whisper activo si hay clave de Gemini
 WHISPER_ACTIVO = bool(os.getenv("GEMINI_API_KEY"))
+
+# Cliente de Twilio para enviar respuestas fuera del ciclo del webhook
+twilio_client = TwilioClient(
+    os.getenv("TWILIO_ACCOUNT_SID"),
+    os.getenv("TWILIO_AUTH_TOKEN")
+)
+TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")  # ej: "+14155238886"
 
 # ──────────────────────────────────────────
 # Transcripción con Gemini (opcional)
@@ -50,12 +58,49 @@ async def transcribir_audio(media_url: str) -> str:
         return response.text.strip()
     finally:
         os.unlink(tmp_path)
+
+# ──────────────────────────────────────────
+# Procesamiento en segundo plano + envío de respuesta real
+# ──────────────────────────────────────────
+
+def procesar_y_responder(numero: str, texto: str, historial: list):
+    """
+    Corre el procesamiento pesado (Claude + herramientas) fuera del ciclo
+    de respuesta a Twilio, y luego envía el resultado vía API REST de Twilio.
+    """
+    try:
+        respuesta_texto, historial_nuevo = procesar_mensaje(texto, historial)
+        _historiales[numero] = historial_nuevo[-10:]
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+
+        # Limpiar historial en cualquier error y reintentar desde cero
+        _historiales[numero] = []
+        try:
+            respuesta_texto, historial_nuevo = procesar_mensaje(texto, [])
+            _historiales[numero] = historial_nuevo[-10:]
+        except Exception as e2:
+            traceback.print_exc()
+            respuesta_texto = f"Error: {str(e2)}"
+
+    try:
+        twilio_client.messages.create(
+            from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
+            to=numero,  # numero ya viene como "whatsapp:+57..."
+            body=respuesta_texto
+        )
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
 # ──────────────────────────────────────────
 # Webhook principal de WhatsApp
 # ──────────────────────────────────────────
 
 @app.post("/whatsapp")
 async def webhook_whatsapp(
+    background_tasks: BackgroundTasks,
     From: str  = Form(...),
     Body: str  = Form(""),
     MediaUrl0: str           = Form(None),
@@ -91,24 +136,11 @@ async def webhook_whatsapp(
         twiml.message("No entendí el mensaje. ¿Puedes escribirlo de nuevo?")
         return Response(content=str(twiml), media_type="application/xml")
 
-    try:
-        respuesta_texto, historial_nuevo = procesar_mensaje(texto, historial)
-        _historiales[numero] = historial_nuevo[-10:]
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-
-        # Limpiar historial en cualquier error y reintentar
-        _historiales[numero] = []
-        try:
-            respuesta_texto, historial_nuevo = procesar_mensaje(texto, [])
-            _historiales[numero] = historial_nuevo[-10:]
-        except Exception as e2:
-            traceback.print_exc()
-            respuesta_texto = f"Error: {str(e2)}"
+    # El procesamiento pesado (Claude + herramientas) corre en segundo plano.
+    # Twilio recibe esta respuesta vacía de inmediato, así que nunca hace timeout.
+    background_tasks.add_task(procesar_y_responder, numero, texto, historial)
 
     twiml = MessagingResponse()
-    twiml.message(respuesta_texto)
     return Response(content=str(twiml), media_type="application/xml")
 
 @app.get("/health")
